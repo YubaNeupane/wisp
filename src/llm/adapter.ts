@@ -6,7 +6,7 @@ export interface LLMAdapter {
 }
 
 export function createAdapter(): LLMAdapter {
-  const provider = process.env.LLM_PROVIDER
+  const provider = process.env.LLM_PROVIDER?.trim()
   if (!provider) throw new Error('LLM_PROVIDER must be set to "anthropic" or "openai"')
   if (provider === 'anthropic') return new AnthropicAdapter()
   if (provider === 'openai') return new OpenAIAdapter()

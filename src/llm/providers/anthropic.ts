@@ -7,7 +7,9 @@ export class AnthropicAdapter implements LLMAdapter {
   private client: Anthropic
 
   constructor() {
-    this.client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error('ANTHROPIC_API_KEY must be set when LLM_PROVIDER=anthropic')
+    this.client = new Anthropic({ apiKey })
   }
 
   async send(prompt: string): Promise<string> {
@@ -18,7 +20,7 @@ export class AnthropicAdapter implements LLMAdapter {
       messages: [{ role: 'user', content: prompt }],
     })
     const block = message.content[0]
-    if (block.type !== 'text') throw new Error('Unexpected response type from Anthropic')
+    if (!block || block.type !== 'text') throw new Error('Unexpected response type from Anthropic')
     return block.text
   }
 }
