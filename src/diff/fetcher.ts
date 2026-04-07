@@ -27,6 +27,7 @@ export async function fetchDiff(octokit: Octokit, context: PullContext): Promise
       owner: context.owner,
       repo: context.repo,
       pull_number: context.pullNumber,
+      per_page: 100,
     }),
     octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}', {
       owner: context.owner,
@@ -36,9 +37,10 @@ export async function fetchDiff(octokit: Octokit, context: PullContext): Promise
     }),
   ])
 
+  const apiTreeTruncated = !!(treeResponse.data as { truncated?: boolean }).truncated
   const allFiles = filesResponse.data as FileDiff[]
-  const truncated = allFiles.length > MAX_FILES
-  const files = truncated ? allFiles.slice(0, MAX_FILES) : allFiles
+  const truncated = allFiles.length > MAX_FILES || apiTreeTruncated
+  const files = allFiles.length > MAX_FILES ? allFiles.slice(0, MAX_FILES) : allFiles
 
   const tree = (treeResponse.data.tree as { path?: string }[])
     .map((item) => item.path)
