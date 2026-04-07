@@ -1,0 +1,48 @@
+import type { Octokit } from '@octokit/core'
+
+export interface FileDiff {
+  filename: string
+  patch?: string
+}
+
+export interface DiffResult {
+  files: FileDiff[]
+  tree: string[]
+  truncated: boolean
+}
+
+export interface PullContext {
+  owner: string
+  repo: string
+  pullNumber: number
+  mergeCommitSha: string
+  defaultBranch: string
+}
+
+const MAX_FILES = 50
+
+export async function fetchDiff(octokit: Octokit, context: PullContext): Promise<DiffResult> {
+  const [filesResponse, treeResponse] = await Promise.all([
+    octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}/files', {
+      owner: context.owner,
+      repo: context.repo,
+      pull_number: context.pullNumber,
+    }),
+    octokit.request('GET /repos/{owner}/{repo}/git/trees/{tree_sha}', {
+      owner: context.owner,
+      repo: context.repo,
+      tree_sha: context.mergeCommitSha,
+      recursive: '1',
+    }),
+  ])
+
+  const allFiles = filesResponse.data as FileDiff[]
+  const truncated = allFiles.length > MAX_FILES
+  const files = truncated ? allFiles.slice(0, MAX_FILES) : allFiles
+
+  const tree = (treeResponse.data.tree as { path?: string }[])
+    .map((item) => item.path)
+    .filter((p): p is string => Boolean(p))
+
+  return { files, tree, truncated }
+}
