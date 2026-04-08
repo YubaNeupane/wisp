@@ -56,7 +56,7 @@ async function createCheckRun(
     const data = response.data as { id: number }
     return data.id
   } catch (err) {
-    log.error('Failed to create check run (continuing)', err)
+    log.warn(`Failed to create check run (continuing): ${err instanceof Error ? err.message : String(err)}`)
     return null
   }
 }
@@ -159,7 +159,7 @@ export async function handleMergedPR(
   log.info(`[Wisp] PR #${context.pullNumber} merged in ${owner}/${repo} — fetching diff`)
 
   // Create check run (in_progress) — optional, errors do not stop processing
-  const checkRunId = await createCheckRun(octokit, owner, repo, headSha, log)
+  const checkRunId = await createCheckRun(octokit, owner, repo, sha, log)
 
   let diff
   try {
