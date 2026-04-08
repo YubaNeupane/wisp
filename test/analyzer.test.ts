@@ -8,7 +8,7 @@ const mockDiff: DiffResult = {
   truncated: false,
 }
 
-const mockLog = { warn: vi.fn(), error: vi.fn() }
+const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
 describe('analyze', () => {
   beforeEach(() => {

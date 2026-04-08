@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smee": "npx smee -u https://smee.io/NFYi9DNsDw53TCsx --port 3000"
+    "smee": "npx smee -u https://smee.io/NFYi9DNsDw53TCsx --port 3000 --path /api/github/webhooks"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",

@@ -28,7 +28,10 @@ export async function handleMergedPR(
   payload: MergedPRPayload,
   log: Log
 ): Promise<void> {
-  if (!payload.pull_request.merged) return
+  if (!payload.pull_request.merged) {
+    log.info(`[Wisp] PR #${payload.pull_request.number} closed but not merged — skipping`)
+    return
+  }
   const sha = payload.pull_request.merge_commit_sha
   if (!sha) {
     log.error('merged PR has no merge_commit_sha — skipping')
@@ -43,6 +46,8 @@ export async function handleMergedPR(
     defaultBranch: payload.repository.default_branch,
   }
 
+  log.info(`[Wisp] PR #${context.pullNumber} merged in ${context.owner}/${context.repo} — fetching diff`)
+
   let diff
   try {
     diff = await fetchDiff(octokit, context)
@@ -50,6 +55,8 @@ export async function handleMergedPR(
     log.error('Failed to fetch diff', err)
     return
   }
+
+  log.info(`[Wisp] Fetched diff: ${diff.files.length} file(s)${diff.truncated ? ' (truncated)' : ''} — calling LLM`)
 
   let adapter
   try {
@@ -64,6 +71,8 @@ export async function handleMergedPR(
     log.info(`[Wisp] No documentation updates needed for PR #${context.pullNumber}`)
     return
   }
+
+  log.info(`[Wisp] LLM suggested ${updates.length} doc update(s): ${updates.map((u) => u.path).join(', ')}`)
 
   try {
     await createDocSyncPR(octokit, context, updates, log)

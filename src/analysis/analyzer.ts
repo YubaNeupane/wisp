@@ -13,6 +13,7 @@ export interface AnalysisResult {
 }
 
 type Log = {
+  info: (msg: string) => void
   warn: (msg: string) => void
   error: (msg: string, err?: unknown) => void
 }
@@ -23,6 +24,7 @@ export async function analyze(
   log: Log
 ): Promise<AnalysisResult> {
   const prompt = buildPrompt(diff)
+  log.info('[Wisp] Sending prompt to LLM...')
   let raw: string
   try {
     raw = await adapter.send(prompt)
@@ -30,6 +32,7 @@ export async function analyze(
     log.error('LLM call failed', err)
     return { updates: [] }
   }
+  log.info('[Wisp] LLM responded — parsing result')
 
   try {
     const parsed = JSON.parse(raw) as unknown
