@@ -69,7 +69,7 @@ export async function analyze(
   try {
     raw = await adapter.send(prompt)
   } catch (err) {
-    log.error('LLM call failed', err)
+    log.error(`LLM call failed: ${err instanceof Error ? err.message : String(err)}`)
     return { updates: [] }
   }
   log.info('[Wisp] LLM responded — parsing result')
@@ -89,7 +89,7 @@ export async function analyze(
   try {
     retryRaw = await adapter.send(retryPrompt)
   } catch (err) {
-    log.error('LLM retry call failed', err)
+    log.error(`LLM retry call failed: ${err instanceof Error ? err.message : String(err)}`)
     return { updates: [] }
   }
   log.info('[Wisp] LLM retry responded — parsing result')
