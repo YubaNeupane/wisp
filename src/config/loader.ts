@@ -17,21 +17,23 @@ export interface WispConfig {
 }
 
 export async function loadConfig(octokit: Octokit, context: PullContext): Promise<WispConfig> {
-  try {
-    const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-      owner: context.owner,
-      repo: context.repo,
-      path: '.wisp.yml',
-      ref: context.defaultBranch,
-    })
-    const data = response.data as { content: string; encoding: string }
-    const raw = Buffer.from(data.content, 'base64').toString('utf8')
-    const parsed = yaml.load(raw)
-    if (typeof parsed === 'object' && parsed !== null) {
-      return parsed as WispConfig
+  const tryLoad = async (filename: string) => {
+    try {
+      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner: context.owner,
+        repo: context.repo,
+        path: filename,
+        ref: context.defaultBranch,
+      })
+      const data = response.data as { content: string; encoding: string }
+      const raw = Buffer.from(data.content, 'base64').toString('utf8')
+      const parsed = yaml.load(raw)
+      return (typeof parsed === 'object' && parsed !== null) ? (parsed as WispConfig) : null
+    } catch {
+      return null
     }
-    return {}
-  } catch {
-    return {}
   }
+
+  const result = await tryLoad('.wisp.yml') || await tryLoad('.wisp.yaml')
+  return result || {}
 }
