@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createAdapter } from './adapter.js'
+import { createAdapter } from '../src/llm/adapter.js'
 
 describe('createAdapter', () => {
   beforeEach(() => {

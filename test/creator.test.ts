@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createDocSyncPR } from './creator.js'
-import type { PullContext } from '../diff/fetcher.js'
-import type { DocUpdate } from '../analysis/analyzer.js'
+import { createDocSyncPR } from '../src/pr/creator.js'
+import type { PullContext } from '../src/diff/fetcher.js'
+import type { DocUpdate } from '../src/analysis/analyzer.js'
 
 const mockContext: PullContext = {
   owner: 'acme',

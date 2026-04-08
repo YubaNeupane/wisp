@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { LLMAdapter } from '../llm/adapter.js'
-import type { DiffResult } from '../diff/fetcher.js'
+import type { LLMAdapter } from '../src/llm/adapter.js'
+import type { DiffResult } from '../src/diff/fetcher.js'
 
 const mockDiff: DiffResult = {
   files: [{ filename: 'src/auth.ts', patch: '@@ -1,3 +1,5 @@\n+export function login() {}' }],
@@ -16,7 +16,7 @@ describe('analyze', () => {
   })
 
   it('returns updates from a valid LLM response', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(
         JSON.stringify({
@@ -32,7 +32,7 @@ describe('analyze', () => {
   })
 
   it('returns empty updates when LLM returns no changes needed', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
     }
@@ -41,7 +41,7 @@ describe('analyze', () => {
   })
 
   it('returns empty updates and warns on malformed JSON', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue('Sure! Here are my suggestions: ...'),
     }
@@ -51,7 +51,7 @@ describe('analyze', () => {
   })
 
   it('returns empty updates and logs error when LLM throws', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockRejectedValue(new Error('Network timeout')),
     }
@@ -61,7 +61,7 @@ describe('analyze', () => {
   })
 
   it('includes the file tree and diff patch in the prompt', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
     }
@@ -73,7 +73,7 @@ describe('analyze', () => {
   })
 
   it('notes truncation in the prompt when diff was truncated', async () => {
-    const { analyze } = await import('./analyzer.js')
+    const { analyze } = await import('../src/analysis/analyzer.js')
     const truncatedDiff: DiffResult = { ...mockDiff, truncated: true }
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
