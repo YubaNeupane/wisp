@@ -14,7 +14,7 @@ type MergedPRPayload = {
   pull_request: {
     merged: boolean
     number: number
-    merge_commit_sha: string
+    merge_commit_sha: string // non-null when merged === true per GitHub API contract
   }
   repository: {
     owner: { login: string }
@@ -46,7 +46,13 @@ export async function handleMergedPR(
     return
   }
 
-  const adapter = createAdapter()
+  let adapter
+  try {
+    adapter = createAdapter()
+  } catch (err) {
+    log.error('Failed to create LLM adapter (check LLM_PROVIDER env var)', err)
+    return
+  }
   const { updates } = await analyze(diff, adapter, log)
 
   if (updates.length === 0) {
