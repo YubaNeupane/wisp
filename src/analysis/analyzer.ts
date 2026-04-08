@@ -35,8 +35,11 @@ export async function analyze(
   }
   log.info('[Wisp] LLM responded — parsing result')
 
+  // Strip markdown code fences if the LLM wrapped the JSON (e.g. ```json ... ```)
+  const json = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
+
   try {
-    const parsed = JSON.parse(raw) as unknown
+    const parsed = JSON.parse(json) as unknown
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
@@ -64,7 +67,7 @@ export async function analyze(
     }
     return { updates: validUpdates }
   } catch {
-    log.warn(`LLM returned non-JSON response: ${raw.slice(0, 100)}`)
+    log.warn(`LLM returned non-JSON response: ${json.slice(0, 100)}`)
     return { updates: [] }
   }
 }
