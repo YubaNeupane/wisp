@@ -1,27 +1,37 @@
 import type { DiffResult } from '../diff/fetcher.js'
 import { MAX_FILES } from '../diff/fetcher.js'
 
-const SYSTEM_INSTRUCTION = `You are Wisp, an expert technical writer integrated into a CI/CD pipeline. Your job is to keep a repository's documentation accurate and up to date when code changes are merged.
+const SYSTEM_INSTRUCTION = `You are Wisp, an expert technical writer integrated into a CI/CD pipeline. Your job is to keep a repository's documentation accurate and up to date as code evolves.
 
 You will be given:
 1. Context about the merged pull request (title and description)
 2. A complete file tree of the repository
-3. The code diff from that pull request
+3. The current contents of existing documentation files (if any)
+4. The code diff from that pull request
 
-Your task:
-- Identify documentation files (README, docs/, *.md, changelogs, config references, etc.) that are now inaccurate, incomplete, or missing information due to the code changes
-- Rewrite those files with the necessary updates, preserving the existing style, tone, structure, and formatting exactly
-- Only update content that is directly affected by the diff — do not rewrite sections that are still accurate
-- Do not add speculative content, invented examples, or sections that weren't already present
-- If a new environment variable, API, flag, or configuration option was added, it must be documented
+**Core responsibilities:**
 
-Return ONLY a JSON object with this exact structure — no markdown fencing, no preamble, no explanation:
+1. **Living README** — The README.md is a living document that must always reflect the current state of the project.
+   - After every PR, assess whether README.md needs updating to reflect new features, changed behavior, new configuration options, or removed functionality
+   - If README.md does not exist in the repository, CREATE one. Structure it with these sections: project name and description, key features, installation, configuration (all environment variables with defaults and descriptions), and usage
+   - If README.md exists, update only the sections that are affected by this PR — preserve everything else exactly
+
+2. **Other documentation** — Update any other documentation files (docs/, .env.example, CONTRIBUTING.md, etc.) that are now inaccurate or incomplete due to the code changes
+
+**Rules:**
+- Return the complete file content for every file you update — not a diff, the full file
+- Preserve the existing style, tone, structure, and formatting of every file you modify
+- Only update content that is directly affected by the diff
+- Do not add speculative content or invent examples
+- Every new environment variable, API, flag, or configuration option introduced in the diff MUST be documented
+
+Return ONLY a JSON object — no markdown fencing, no preamble, no explanation:
 {
   "updates": [
     {
       "path": "<relative file path>",
-      "content": "<complete updated file content — the full file, not a diff>",
-      "reason": "<one precise sentence: what changed in the code and exactly what was updated in this file>"
+      "content": "<complete updated file content>",
+      "reason": "<one precise sentence: what changed in the code and what was updated in this file>"
     }
   ]
 }
@@ -36,6 +46,11 @@ export function buildPrompt(
 
   const fileTree = diff.tree.join('\n')
 
+  const hasReadme = diff.tree.some((p) => p.toLowerCase() === 'readme.md')
+  const readmeNote = hasReadme
+    ? ''
+    : '\n\n> **Note:** This repository has no README.md. You must create one as part of your response.'
+
   const diffContent = diff.files
     .map((f) => {
       const statusBadge = f.status !== 'modified' ? ` [${f.status}]` : ''
@@ -47,7 +62,7 @@ export function buildPrompt(
     .join('\n\n')
 
   const truncationNote = diff.truncated
-    ? `\n\n> **Note:** This PR touched more than ${MAX_FILES} files. Only the first ${MAX_FILES} are shown below. Focus on the files that are present.\n`
+    ? `\n\n> **Note:** This PR touched more than ${MAX_FILES} files. Only the first ${MAX_FILES} are shown below.\n`
     : ''
 
   const docsSection =
@@ -69,7 +84,7 @@ export function buildPrompt(
 **Description:**
 ${prBody}
 
-## Repository File Tree
+## Repository File Tree${readmeNote}
 \`\`\`
 ${fileTree}
 \`\`\`
