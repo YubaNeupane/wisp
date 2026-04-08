@@ -33,8 +33,11 @@ function makeMockOctokit(existingFileSha?: string) {
       if (route === 'PUT /repos/{owner}/{repo}/contents/{path}') {
         return Promise.resolve({})
       }
-      if (route === 'POST /repos/{owner}/{repo}/pulls') {
+      if (route === 'POST /repos/{owner}/{repo}/labels') {
         return Promise.resolve({})
+      }
+      if (route === 'POST /repos/{owner}/{repo}/pulls') {
+        return Promise.resolve({ data: { html_url: 'https://github.com/acme/app/pull/43', number: 43 } })
       }
       return Promise.resolve({})
     }),
@@ -48,7 +51,7 @@ describe('createDocSyncPR', () => {
 
   it('creates a branch named wisp/docs-sync-<first 7 chars of sha>', async () => {
     const octokit = makeMockOctokit()
-    await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     const refCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'POST /repos/{owner}/{repo}/git/refs'
     )
@@ -57,7 +60,7 @@ describe('createDocSyncPR', () => {
 
   it('commits each file with a descriptive message including the reason', async () => {
     const octokit = makeMockOctokit()
-    await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     const putCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'PUT /repos/{owner}/{repo}/contents/{path}'
     )
@@ -67,7 +70,7 @@ describe('createDocSyncPR', () => {
 
   it('opens a PR referencing the triggering PR number targeting the default branch', async () => {
     const octokit = makeMockOctokit()
-    await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     const prCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'POST /repos/{owner}/{repo}/pulls'
     )
@@ -76,9 +79,24 @@ describe('createDocSyncPR', () => {
     expect(prCall?.[1].head).toBe('wisp/docs-sync-abc1234')
   })
 
+  it('returns the URL of the opened PR', async () => {
+    const octokit = makeMockOctokit()
+    const result = await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
+    expect(result.url).toBe('https://github.com/acme/app/pull/43')
+  })
+
+  it('assigns the docs PR to the original PR author', async () => {
+    const octokit = makeMockOctokit()
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
+    const assignCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === 'POST /repos/{owner}/{repo}/issues/{issue_number}/assignees'
+    )
+    expect(assignCall?.[1].assignees).toContain('alice')
+  })
+
   it('includes the file SHA when updating an existing file', async () => {
     const octokit = makeMockOctokit('existing-file-sha')
-    await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     const putCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'PUT /repos/{owner}/{repo}/contents/{path}'
     )
@@ -87,7 +105,7 @@ describe('createDocSyncPR', () => {
 
   it('omits SHA when creating a new file', async () => {
     const octokit = makeMockOctokit()
-    await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    await createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     const putCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'PUT /repos/{owner}/{repo}/contents/{path}'
     )
@@ -111,13 +129,13 @@ describe('createDocSyncPR', () => {
           return Promise.resolve({})
         }
         if (route === 'POST /repos/{owner}/{repo}/pulls') {
-          return Promise.resolve({})
+          return Promise.resolve({ data: { html_url: 'https://github.com/acme/app/pull/43', number: 43 } })
         }
         return Promise.resolve({})
       }),
     }
     await expect(
-      createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+      createDocSyncPR(octokit as any, mockContext, mockUpdates, 'alice', mockLog)
     ).resolves.not.toThrow()
   })
 })

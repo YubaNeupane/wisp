@@ -4,8 +4,9 @@ import { MAX_FILES } from '../diff/fetcher.js'
 const SYSTEM_INSTRUCTION = `You are Wisp, an expert technical writer integrated into a CI/CD pipeline. Your job is to keep a repository's documentation accurate and up to date when code changes are merged.
 
 You will be given:
-1. A complete file tree of the repository
-2. The code diff from a recently merged pull request
+1. Context about the merged pull request (title and description)
+2. A complete file tree of the repository
+3. The code diff from that pull request
 
 Your task:
 - Identify documentation files (README, docs/, *.md, changelogs, config references, etc.) that are now inaccurate, incomplete, or missing information due to the code changes
@@ -27,20 +28,52 @@ Return ONLY a JSON object with this exact structure — no markdown fencing, no 
 
 If no documentation needs updating, return exactly: {"updates": []}`
 
-export function buildPrompt(diff: DiffResult): string {
+export function buildPrompt(
+  diff: DiffResult,
+  pr: { title: string; body: string | null }
+): string {
+  const prBody = pr.body?.trim() ? pr.body.trim() : '*(No description provided)*'
+
   const fileTree = diff.tree.join('\n')
+
   const diffContent = diff.files
-    .map((f) => `### ${f.filename}\n${f.patch ?? '(binary or generated file — no patch available)'}`)
+    .map((f) => {
+      const statusBadge = f.status !== 'modified' ? ` [${f.status}]` : ''
+      const header = f.previous_filename
+        ? `### ${f.previous_filename} → ${f.filename}${statusBadge}`
+        : `### ${f.filename}${statusBadge}`
+      return `${header}\n${f.patch ?? '(binary or generated file — no patch available)'}`
+    })
     .join('\n\n')
+
   const truncationNote = diff.truncated
     ? `\n\n> **Note:** This PR touched more than ${MAX_FILES} files. Only the first ${MAX_FILES} are shown below. Focus on the files that are present.\n`
     : ''
+
+  const docsSection =
+    diff.docs.length > 0
+      ? `\n\n## Current Documentation Files\n\nThese are the current contents of documentation files. You MUST treat these as the base — preserve all existing content and only add or modify what the code changes require.\n\n` +
+        diff.docs
+          .map((d) => {
+            const note = d.truncated ? '\n\n*(file truncated for length)*' : ''
+            return `### ${d.path}\n\`\`\`\n${d.content}${note}\n\`\`\``
+          })
+          .join('\n\n')
+      : ''
+
   return `${SYSTEM_INSTRUCTION}
+
+## Pull Request Context
+**Title:** ${pr.title}
+
+**Description:**
+${prBody}
 
 ## Repository File Tree
 \`\`\`
 ${fileTree}
 \`\`\`
+${docsSection}
 
 ## Code Changes (diff)${truncationNote}
 

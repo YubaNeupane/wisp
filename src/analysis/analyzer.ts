@@ -20,10 +20,11 @@ type Log = {
 
 export async function analyze(
   diff: DiffResult,
+  pr: { title: string; body: string | null },
   adapter: LLMAdapter,
   log: Log
 ): Promise<AnalysisResult> {
-  const prompt = buildPrompt(diff)
+  const prompt = buildPrompt(diff, pr)
   log.info('[Wisp] Sending prompt to LLM...')
   let raw: string
   try {
