@@ -2,7 +2,9 @@ import type { Octokit } from '@octokit/core'
 
 export interface FileDiff {
   filename: string
+  status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged'
   patch?: string
+  previous_filename?: string
 }
 
 export interface DiffResult {
