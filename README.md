@@ -7,6 +7,8 @@ Wisp is a GitHub App that keeps documentation in sync with code changes. It upda
 - Automatic documentation updates on code changes
 - Supports multiple LLM providers (Anthropic, OpenAI)
 - Flexible configuration options
+- Configuration file support for behavior customization
+- GitHub Check Runs integration for status visibility
 
 ## Installation
 ```bash

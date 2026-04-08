@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Wisp Is
 
-Wisp is a GitHub App that keeps documentation in sync with code changes. When a PR is merged, it fetches the diff, sends it to an LLM, and — if doc updates are needed — opens a "Documentation Sync" PR. It stays silent when no updates are needed.
+Wisp is a GitHub App that keeps documentation in sync with code changes. When a PR is merged, it fetches the diff, sends it to an LLM, and — if doc updates are needed — opens a "Documentation Sync" PR or posts suggestions as comments. It stays silent when no updates are needed.
 
 ## Commands
 
@@ -32,9 +32,9 @@ webhook/handler → diff/fetcher → analysis/analyzer (LLM) → pr/creator
 
 **`src/llm/adapter.ts`** — Provider-agnostic `LLMAdapter` interface (`send(prompt): Promise<string>`). Provider selected at startup via `LLM_PROVIDER`. Implementations in `providers/anthropic.ts` and `providers/openai.ts`.
 
-**`src/analysis/analyzer.ts`** — Builds prompt (system instruction + file tree + diff + PR title and body), calls LLM, parses structured JSON response. Returns empty `updates: []` on LLM failure or malformed JSON (logs warning, never throws).
+**`src/analysis/analyzer.ts`** — Builds prompt (system instruction + file tree + diff + PR title and body), calls LLM, parses structured JSON response with retry mechanism. Returns empty `updates: []` on LLM failure or malformed JSON (logs warning, never throws).
 
-**`src/pr/creator.ts`** — When updates are non-empty: creates branch `wisp/docs-sync-<sha7>`, commits files with `[Wisp] Update documentation`, opens PR titled `[Wisp] Documentation Sync` targeting the default branch, assigns it to original PR author, and labels as documentation.
+**`src/pr/creator.ts`** — When updates are non-empty: creates branch `wisp/docs-sync-<sha7>`, commits files with `[Wisp] Update documentation`, opens PR titled `[Wisp] Documentation Sync` targeting the default branch, assigns it to original PR author, and labels as documentation. Can be configured to open as draft PR.
 
 ## LLM Response Schema
 
@@ -71,4 +71,4 @@ The analyzer instructs the LLM to return:
 
 ## Error Handling Convention
 
-All failures are silent: log the error and return a safe empty result. No retries. Never surface errors to the GitHub user.
+All failures are silent: log the error and return a safe empty result. Retry once for malformed LLM response. Never surface errors to the GitHub user.
