@@ -16,7 +16,7 @@
     "probot": "^13.3.0"
   },
   "devDependencies": {
-    "@octokit/core": "^6.0.0",
+    "@octokit/core": "^5.2.2",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
