@@ -13,7 +13,7 @@ export async function createDocSyncPR(
   updates: DocUpdate[],
   log: Log
 ): Promise<void> {
-  const { owner, repo, defaultBranch, mergeCommitSha } = context
+  const { owner, repo, pullNumber, defaultBranch, mergeCommitSha } = context
   const branchName = `wisp/docs-sync-${mergeCommitSha.slice(0, 7)}`
 
   const refResponse = await octokit.request('GET /repos/{owner}/{repo}/git/ref/{ref}', {
@@ -55,30 +55,42 @@ export async function createDocSyncPR(
       // File does not exist yet — no SHA needed for creation
     }
 
+    const shortReason = update.reason.length > 72 ? update.reason.slice(0, 69) + '...' : update.reason
     await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
       owner,
       repo,
       path: update.path,
-      message: '[Wisp] Update documentation',
+      message: `docs(${update.path}): ${shortReason}`,
       content: encoded,
       branch: branchName,
       ...(fileSha !== undefined ? { sha: fileSha } : {}),
     })
   }
 
-  const body =
-    `This PR was automatically opened by Wisp to keep documentation in sync.\n\n` +
-    `## Updated Files\n\n` +
-    updates.map((u) => `- **${u.path}**: ${u.reason}`).join('\n')
+  const fileList = updates
+    .map((u) => `**\`${u.path}\`** — ${u.reason}`)
+    .join('\n\n')
+
+  const body = `## Documentation Sync
+
+Wisp detected documentation that needs updating following the merge of #${pullNumber}.
+
+### Updated Files
+
+${fileList}
+
+---
+
+<sub>Opened automatically by Wisp · Review carefully before merging</sub>`
 
   await octokit.request('POST /repos/{owner}/{repo}/pulls', {
     owner,
     repo,
-    title: '[Wisp] Documentation Sync',
+    title: `docs: sync documentation for #${pullNumber}`,
     body,
     head: branchName,
     base: defaultBranch,
   })
 
-  log.info(`[Wisp] Opened documentation sync PR: ${branchName}`)
+  log.info(`[Wisp] Opened documentation sync PR for #${pullNumber}: ${branchName}`)
 }

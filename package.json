@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smee": "npx smee -u https://smee.io/NFYi9DNsDw53TCsx --port 3000 --path /api/github/webhooks",
-    "test:pr": "BRANCH=test/wisp-$(date +%s) && git checkout -b $BRANCH && echo \"wisp test $(date)\" >> test-trigger.txt && git add test-trigger.txt && git commit -m 'test: trigger wisp doc sync' && git push -u origin $BRANCH && gh pr create --title 'Test: trigger Wisp' --body 'Automated test PR to trigger Wisp doc sync.' --base main && gh pr merge --squash --delete-branch --yes"
+    "test:pr": "BRANCH=test/wisp-$(date +%s) && git checkout -b $BRANCH && echo \"wisp test $(date)\" >> test-trigger.txt && git add test-trigger.txt && git commit -m 'test: trigger wisp doc sync' && git push -u origin $BRANCH && gh pr create --title 'Test: trigger Wisp' --body 'Automated test PR to trigger Wisp doc sync.' --base main && gh pr merge --squash --delete-branch --yes",
+    "test:pr:docs": "BRANCH=test/wisp-docs-$(date +%s) && git checkout -b $BRANCH && node -e \"const fs=require('fs'),p='src/diff/fetcher.ts',c=fs.readFileSync(p,'utf8');fs.writeFileSync(p,c.replace('export const MAX_FILES = 50','// Configurable via MAX_FILES env var (default: 50)\\nexport const MAX_FILES = Number(process.env.MAX_FILES) || 50'));\" && git add src/diff/fetcher.ts && git commit -m 'feat: make MAX_FILES configurable via environment variable' && git push -u origin $BRANCH && gh pr create --title 'feat: make MAX_FILES configurable via env var' --body 'Users can now set MAX_FILES env var to control how many files are included in the diff. Defaults to 50.' --base main && gh pr merge --squash --delete-branch --yes && git checkout main && git checkout src/diff/fetcher.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",
