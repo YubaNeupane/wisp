@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Wisp Is
 
-Wisp is a GitHub App that keeps documentation in sync with code changes. When a PR is merged, it fetches the diff, sends it to an LLM, and — if doc updates are needed — opens a "Documentation Sync" PR or posts suggestions as comments. It stays silent when no updates are needed.
+Wisp is a GitHub App that keeps documentation in sync with code changes. When a PR is merged, it fetches the diff, sends it to an LLM, and — if doc updates are needed — opens a "Documentation Sync" PR or posts suggestions as comments. It also provides status feedback via GitHub Check Runs. It reports "neutral" when no updates are needed.
 
 ## Commands
 
@@ -26,7 +26,7 @@ Pipeline architecture — each stage is a discrete module:
 webhook/handler → diff/fetcher → analysis/analyzer (LLM) → pr/creator
 ```
 
-**`src/webhook/handler.ts`** — Probot entry point. Listens for `pull_request.closed`, guards on `merged === true`, extracts `owner`, `repo`, `pull_number`, `merge_commit_sha`, `default_branch`, `title`, `body`, and `user`.
+**`src/webhook/handler.ts`** — Probot entry point. Listens for `pull_request.closed`, guards on `merged === true`, extracts `owner`, `repo`, `pull_number`, `merge_commit_sha`, `default_branch`, `title`, `body`, and `user`. It also creates and completes GitHub Check Runs to provide feedback on the documentation sync process.
 
 **`src/diff/fetcher.ts`** — Two Octokit calls: PR file diffs + full repo file tree (paths only). Truncates to 50 files if exceeded. Filters and fetches up to 10 documentation files or 8000 characters, whichever comes first.
 
@@ -72,4 +72,6 @@ The analyzer instructs the LLM to return:
 
 ## Error Handling Convention
 
-All failures are silent: log the error and return a safe empty result. Retry once for malformed LLM response. Never surface errors to the GitHub user.
+All critical failures are logged internally. Wisp attempts to provide feedback on its documentation sync process via GitHub Check Runs, which will reflect success, neutral status (no updates needed), or failure. Check run completion is best-effort and failures do not stop the pipeline. Retry once for malformed LLM response.
+
+```
