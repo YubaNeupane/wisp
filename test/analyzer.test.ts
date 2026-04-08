@@ -87,4 +87,24 @@ describe('analyze', () => {
     const prompt = (adapter.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(prompt).toContain('50')
   })
+
+  it('retries once when LLM returns malformed JSON and succeeds on retry', async () => {
+    const { analyze } = await import('../src/analysis/analyzer.js')
+    const validResponse = JSON.stringify({
+      updates: [{ path: 'README.md', content: '# Retried', reason: 'retry success' }],
+    })
+    const adapter: LLMAdapter = {
+      send: vi.fn()
+        .mockResolvedValueOnce('Not valid JSON at all!')
+        .mockResolvedValueOnce(validResponse),
+    }
+    const result = await analyze(mockDiff, mockPR, adapter, mockLog)
+    expect(result.updates).toHaveLength(1)
+    expect(result.updates[0].path).toBe('README.md')
+    expect(result.updates[0].content).toBe('# Retried')
+    expect(adapter.send as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(2)
+    expect(mockLog.info).toHaveBeenCalledWith(
+      expect.stringContaining('retrying with format feedback')
+    )
+  })
 })

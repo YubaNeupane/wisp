@@ -2,7 +2,9 @@ import type { Octokit } from '@octokit/core'
 import { fetchDiff, type PullContext } from '../diff/fetcher.js'
 import { analyze } from '../analysis/analyzer.js'
 import { createDocSyncPR } from '../pr/creator.js'
+import { postDocSyncComment } from '../pr/commenter.js'
 import { createAdapter } from '../llm/adapter.js'
+import { loadConfig } from '../config/loader.js'
 
 type Log = {
   info: (msg: string) => void
@@ -18,7 +20,8 @@ type MergedPRPayload = {
     title: string
     body: string | null
     user: { login: string }
-    head: { ref: string }
+    head: { ref: string; sha: string }
+    labels: Array<{ name: string }>
   }
   repository: {
     owner: { login: string }
@@ -33,6 +36,59 @@ const BOT_AUTHORS = new Set([
   'github-actions[bot]',
   'github-merge-queue[bot]',
 ])
+
+async function createCheckRun(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  headSha: string,
+  log: Log
+): Promise<number | null> {
+  try {
+    const response = await octokit.request('POST /repos/{owner}/{repo}/check-runs', {
+      owner,
+      repo,
+      name: 'Wisp Documentation',
+      head_sha: headSha,
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+    })
+    const data = response.data as { id: number }
+    return data.id
+  } catch (err) {
+    log.error('Failed to create check run (continuing)', err)
+    return null
+  }
+}
+
+async function completeCheckRun(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  checkRunId: number | null,
+  conclusion: 'success' | 'neutral' | 'failure',
+  title: string,
+  summary: string
+): Promise<void> {
+  if (checkRunId === null) return
+  try {
+    await octokit.request('PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}', {
+      owner,
+      repo,
+      check_run_id: checkRunId,
+      status: 'completed',
+      conclusion,
+      completed_at: new Date().toISOString(),
+      output: { title, summary },
+    })
+  } catch {
+    // Check run completion is best-effort — never fail the pipeline over it
+  }
+}
+
+function matchesPathPrefix(filePath: string, prefixes: string[]): boolean {
+  return prefixes.some((prefix) => filePath === prefix || filePath.startsWith(prefix + '/') || filePath.startsWith(prefix))
+}
 
 export async function handleMergedPR(
   octokit: Octokit,
@@ -63,9 +119,14 @@ export async function handleMergedPR(
     return
   }
 
+  const owner = payload.repository.owner.login
+  const repo = payload.repository.name
+  const headSha = payload.pull_request.head.sha
+  const prLabels = payload.pull_request.labels.map((l) => l.name)
+
   const context: PullContext = {
-    owner: payload.repository.owner.login,
-    repo: payload.repository.name,
+    owner,
+    repo,
     pullNumber: payload.pull_request.number,
     mergeCommitSha: sha,
     defaultBranch: payload.repository.default_branch,
@@ -76,39 +137,104 @@ export async function handleMergedPR(
     body: payload.pull_request.body,
   }
 
-  log.info(`[Wisp] PR #${context.pullNumber} merged in ${context.owner}/${context.repo} — fetching diff`)
+  // Load .wisp.yml config (errors treated as empty config)
+  const config = await loadConfig(octokit, context)
+
+  // Merge config.ignore_authors with built-in BOT_AUTHORS
+  const ignoredAuthors = new Set([...BOT_AUTHORS, ...(config.ignore_authors ?? [])])
+  if (ignoredAuthors.has(prAuthor) && !BOT_AUTHORS.has(prAuthor)) {
+    log.info(`[Wisp] PR #${context.pullNumber} by "${prAuthor}" — skipping (in config ignore_authors)`)
+    return
+  }
+
+  // Check if any PR label is in config.ignore_labels
+  if (config.ignore_labels && config.ignore_labels.length > 0) {
+    const matchedLabel = prLabels.find((l) => config.ignore_labels!.includes(l))
+    if (matchedLabel) {
+      log.info(`[Wisp] PR #${context.pullNumber} has ignored label "${matchedLabel}" — skipping`)
+      return
+    }
+  }
+
+  log.info(`[Wisp] PR #${context.pullNumber} merged in ${owner}/${repo} — fetching diff`)
+
+  // Create check run (in_progress) — optional, errors do not stop processing
+  const checkRunId = await createCheckRun(octokit, owner, repo, headSha, log)
 
   let diff
   try {
     diff = await fetchDiff(octokit, context)
   } catch (err) {
     log.error('Failed to fetch diff', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     return
   }
 
   log.info(`[Wisp] Fetched diff: ${diff.files.length} file(s)${diff.truncated ? ' (truncated)' : ''} — calling LLM`)
+
+  // Apply doc focus/ignore filtering to diff.docs
+  let filteredDocs = diff.docs
+  if (config.docs?.focus && config.docs.focus.length > 0) {
+    filteredDocs = filteredDocs.filter((d) => matchesPathPrefix(d.path, config.docs!.focus!))
+  }
+  if (config.docs?.ignore && config.docs.ignore.length > 0) {
+    filteredDocs = filteredDocs.filter((d) => !matchesPathPrefix(d.path, config.docs!.ignore!))
+  }
+  const filteredDiff = { ...diff, docs: filteredDocs }
+
+  // Build custom instructions from config
+  const instructionParts: string[] = []
+  if (config.docs?.focus && config.docs.focus.length > 0) {
+    instructionParts.push(`Only update documentation files matching these paths/prefixes: ${config.docs.focus.join(', ')}.`)
+  }
+  if (config.docs?.ignore && config.docs.ignore.length > 0) {
+    instructionParts.push(`Do NOT update documentation files matching these paths/prefixes: ${config.docs.ignore.join(', ')}.`)
+  }
+  if (config.instructions) {
+    instructionParts.push(config.instructions)
+  }
+  const customInstructions = instructionParts.length > 0 ? instructionParts.join('\n\n') : undefined
 
   let adapter
   try {
     adapter = createAdapter()
   } catch (err) {
     log.error('Failed to create LLM adapter (check LLM_PROVIDER env var)', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     return
   }
-  const { updates } = await analyze(diff, pr, adapter, log)
+  const { updates: rawUpdates } = await analyze(filteredDiff, pr, adapter, log, { customInstructions })
+
+  // Post-filter updates based on config.docs.focus and config.docs.ignore
+  let updates = rawUpdates
+  if (config.docs?.focus && config.docs.focus.length > 0) {
+    updates = updates.filter((u) => matchesPathPrefix(u.path, config.docs!.focus!))
+  }
+  if (config.docs?.ignore && config.docs.ignore.length > 0) {
+    updates = updates.filter((u) => !matchesPathPrefix(u.path, config.docs!.ignore!))
+  }
 
   if (updates.length === 0) {
     log.info(`[Wisp] No documentation updates needed for PR #${context.pullNumber}`)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'neutral', 'No updates needed', 'No documentation changes were required for this PR.')
     return
   }
 
   log.info(`[Wisp] LLM suggested ${updates.length} doc update(s): ${updates.map((u) => u.path).join(', ')}`)
 
+  if (config.mode === 'comment') {
+    await postDocSyncComment(octokit, context, updates, log)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'success', 'Documentation synced', updates.map((u) => `- \`${u.path}\``).join('\n'))
+    return
+  }
+
+  // Default: pr mode
   let docsPR: { url: string; title: string } | undefined
   try {
-    docsPR = await createDocSyncPR(octokit, context, updates, prAuthor, log)
+    docsPR = await createDocSyncPR(octokit, context, updates, prAuthor, log, config.pr?.draft ?? false)
   } catch (err) {
     log.error('Failed to create documentation sync PR', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     return
   }
 
@@ -123,4 +249,6 @@ export async function handleMergedPR(
   } catch (err) {
     log.error('Failed to post comment on PR', err)
   }
+
+  await completeCheckRun(octokit, owner, repo, checkRunId, 'success', 'Documentation synced', updates.map((u) => `- \`${u.path}\``).join('\n'))
 }

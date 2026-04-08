@@ -27,6 +27,11 @@ vi.mock('../src/pr/creator.js', () => ({
   createDocSyncPR: mockCreateDocSyncPR,
 }))
 
+const mockLoadConfig = vi.hoisted(() => vi.fn().mockResolvedValue({}))
+vi.mock('../src/config/loader.js', () => ({
+  loadConfig: mockLoadConfig,
+}))
+
 import { handleMergedPR } from '../src/webhook/handler.js'
 
 const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -40,7 +45,8 @@ const mergedPayload = {
     title: 'Add login feature',
     body: 'Implements OAuth login flow.',
     user: { login: 'alice' },
-    head: { ref: 'feature/login' },
+    head: { ref: 'feature/login', sha: 'head-sha-123' },
+    labels: [],
   },
   repository: { owner: { login: 'acme' }, name: 'app', default_branch: 'main' },
 }
@@ -51,6 +57,8 @@ describe('integration: documentation sync pipeline', () => {
     mockLLMResponse = JSON.stringify({
       updates: [{ path: 'README.md', content: '# Updated', reason: 'login added' }],
     })
+    mockLoadConfig.mockResolvedValue({})
+    mockOctokit.request.mockResolvedValue({})
   })
 
   it('runs the full pipeline without throwing', async () => {
@@ -65,7 +73,8 @@ describe('integration: documentation sync pipeline', () => {
       expect.objectContaining({ owner: 'acme', repo: 'app', pullNumber: 1 }),
       expect.arrayContaining([expect.objectContaining({ path: 'README.md' })]),
       'alice',
-      mockLog
+      mockLog,
+      false
     )
   })
 
@@ -98,7 +107,7 @@ describe('integration: documentation sync pipeline', () => {
   it('skips the pipeline for Wisp sync branch PRs', async () => {
     const wispPayload = {
       ...mergedPayload,
-      pull_request: { ...mergedPayload.pull_request, head: { ref: 'wisp/docs-sync-abc1234' } },
+      pull_request: { ...mergedPayload.pull_request, head: { ref: 'wisp/docs-sync-abc1234', sha: 'head-sha-123' } },
     }
     await handleMergedPR(mockOctokit, wispPayload, mockLog)
     expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
@@ -125,5 +134,29 @@ describe('integration: documentation sync pipeline', () => {
     mockCreateDocSyncPR.mockRejectedValueOnce(new Error('GitHub API error'))
     await handleMergedPR(mockOctokit, mergedPayload, mockLog)
     expect(mockLog.error).toHaveBeenCalled()
+  })
+
+  it('skips pipeline when PR has an ignored label (from config)', async () => {
+    mockLoadConfig.mockResolvedValue({ ignore_labels: ['no-docs', 'skip-wisp'] })
+    const labeledPayload = {
+      ...mergedPayload,
+      pull_request: { ...mergedPayload.pull_request, labels: [{ name: 'no-docs' }] },
+    }
+    await handleMergedPR(mockOctokit, labeledPayload, mockLog)
+    expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
+    expect(mockLog.info).toHaveBeenCalledWith(expect.stringContaining('no-docs'))
+  })
+
+  it('opens a draft PR when config.pr.draft is true', async () => {
+    mockLoadConfig.mockResolvedValue({ pr: { draft: true } })
+    await handleMergedPR(mockOctokit, mergedPayload, mockLog)
+    expect(mockCreateDocSyncPR).toHaveBeenCalledWith(
+      mockOctokit,
+      expect.any(Object),
+      expect.any(Array),
+      'alice',
+      mockLog,
+      true
+    )
   })
 })
