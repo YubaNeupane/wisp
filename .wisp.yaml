@@ -1,6 +1,6 @@
-  mode: comment               # 'pr' (default) or 'comment' — post suggestions inline instead of opening a PR
+  mode: PR               # 'pr' (default) or 'comment' — post suggestions inline instead of opening a PR
   docs:
-    focus: [README.md, docs/]   # only touch these
+    focus: [README.md]   # only touch these
     ignore: [CHANGELOG.md]      # never touch these
   ignore_authors: [mybot]       # skip PRs from these authors
   ignore_labels: [no-docs]      # skip PRs with these labels
