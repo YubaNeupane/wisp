@@ -78,7 +78,7 @@ export async function handleIssueComment(octokit: Octokit, payload: any, log: Lo
       return
     }
 
-    const latestComment = wispComments[wispComments.length - 1].body
+    const latestComment = wispComments[wispComments.length - 1].body!
     
     // 4. Parse the markdown
     const updates = parseWispComment(latestComment)
