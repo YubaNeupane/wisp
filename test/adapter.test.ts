@@ -25,8 +25,15 @@ describe('createAdapter', () => {
     expect(typeof adapter.send).toBe('function')
   })
 
-  it('throws for unknown provider', () => {
+  it('returns an adapter with a send method when LLM_PROVIDER=gemini', () => {
     vi.stubEnv('LLM_PROVIDER', 'gemini')
-    expect(() => createAdapter()).toThrow('Unknown LLM_PROVIDER: gemini')
+    vi.stubEnv('GEMINI_API_KEY', 'test-key')
+    const adapter = createAdapter()
+    expect(typeof adapter.send).toBe('function')
+  })
+
+  it('throws for unknown provider', () => {
+    vi.stubEnv('LLM_PROVIDER', 'unknownprovider')
+    expect(() => createAdapter()).toThrow('Unknown LLM_PROVIDER: unknownprovider')
   })
 })
