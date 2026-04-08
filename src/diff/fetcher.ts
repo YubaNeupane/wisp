@@ -19,7 +19,8 @@ export interface PullContext {
   defaultBranch: string
 }
 
-export const MAX_FILES = 50
+// Configurable via MAX_FILES env var (default: 50)
+export const MAX_FILES = Number(process.env.MAX_FILES) || 50
 
 export async function fetchDiff(octokit: Octokit, context: PullContext): Promise<DiffResult> {
   const [filesResponse, treeResponse] = await Promise.all([
