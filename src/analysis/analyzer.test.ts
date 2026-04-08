@@ -28,6 +28,7 @@ describe('analyze', () => {
     expect(result.updates).toHaveLength(1)
     expect(result.updates[0].path).toBe('README.md')
     expect(result.updates[0].content).toBe('# Updated README')
+    expect(result.updates[0].reason).toBe('Added login section')
   })
 
   it('returns empty updates when LLM returns no changes needed', async () => {

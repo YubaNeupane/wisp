@@ -34,15 +34,31 @@ export async function analyze(
   try {
     const parsed = JSON.parse(raw) as unknown
     if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'updates' in parsed &&
-      Array.isArray((parsed as { updates: unknown }).updates)
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !('updates' in parsed) ||
+      !Array.isArray((parsed as { updates: unknown }).updates)
     ) {
-      return parsed as AnalysisResult
+      log.warn('LLM returned unexpected JSON structure')
+      return { updates: [] }
     }
-    log.warn('LLM returned unexpected JSON structure')
-    return { updates: [] }
+
+    const rawUpdates = (parsed as { updates: unknown[] }).updates
+    const validUpdates: DocUpdate[] = []
+    for (const item of rawUpdates) {
+      if (
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).path === 'string' &&
+        typeof (item as Record<string, unknown>).content === 'string' &&
+        typeof (item as Record<string, unknown>).reason === 'string'
+      ) {
+        validUpdates.push(item as DocUpdate)
+      } else {
+        log.warn('LLM returned malformed DocUpdate item, skipping')
+      }
+    }
+    return { updates: validUpdates }
   } catch {
     log.warn(`LLM returned non-JSON response: ${raw.slice(0, 100)}`)
     return { updates: [] }

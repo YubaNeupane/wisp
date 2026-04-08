@@ -1,4 +1,5 @@
 import type { DiffResult } from '../diff/fetcher.js'
+import { MAX_FILES } from '../diff/fetcher.js'
 
 const SYSTEM_INSTRUCTION = `You are Wisp, a documentation sync assistant. Analyze the code diff below and identify documentation files in the repository that need updating.
 
@@ -21,7 +22,7 @@ export function buildPrompt(diff: DiffResult): string {
     .map((f) => `### ${f.filename}\n${f.patch ?? '(binary file)'}`)
     .join('\n\n')
   const truncationNote = diff.truncated
-    ? '\n\n> Note: This PR touched more than 50 files. Only the first 50 are shown.\n'
+    ? `\n\n> Note: This PR touched more than ${MAX_FILES} files. Only the first ${MAX_FILES} are shown.\n`
     : ''
   return `${SYSTEM_INSTRUCTION}
 
