@@ -12,7 +12,7 @@ The Diff Fetcher is responsible for retrieving the differences between the curre
 
 - **MAX_FILES Limitation:**
   - The system now supports a configurable maximum file limit for fetching diffs. This can be set via an environment variable `MAX_FILES`. If not set, it defaults to 50.
-  
+
 - **Environment Variables**:  
   - `MAX_FILES`: Limits the number of files to retrieve during a fetch operation. This allows flexibility according to deployment requirements.
 
