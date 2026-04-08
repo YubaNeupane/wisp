@@ -5,10 +5,9 @@ Wisp is a GitHub App that keeps documentation in sync with code changes. It upda
 
 ## Key Features
 - Automatic documentation updates on code changes
-- Supports multiple LLM providers (Anthropic, OpenAI)
+- Supports multiple LLM providers (Anthropic, OpenAI, Groq)
 - Flexible configuration options
 - Configuration file support for behavior customization
-- GitHub Check Runs integration for status visibility
 
 ## Installation
 ```bash
@@ -24,6 +23,7 @@ npm install
 | `LLM_PROVIDER` | Yes | `anthropic` or `openai` |
 | `ANTHROPIC_API_KEY` | If provider=anthropic | API key for Anthropic |
 | `OPENAI_API_KEY` | If provider=openai | API key for OpenAI |
+| `GROQ_API_KEY` | If provider=groq | API key for Groq |
 | `LLM_MODEL` | No | Override default model |
 | `WISP_AUDIT_LOG` | No | Enable audit logging (default: false) |
 | `WISP_AUDIT_LOG_PATH` | No | File path for audit logs (default: .wisp/audit.log) |
