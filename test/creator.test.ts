@@ -55,23 +55,23 @@ describe('createDocSyncPR', () => {
     expect(refCall?.[1].ref).toBe('refs/heads/wisp/docs-sync-abc1234')
   })
 
-  it('commits each file with message "[Wisp] Update documentation"', async () => {
+  it('commits each file with a descriptive message including the reason', async () => {
     const octokit = makeMockOctokit()
     await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
     const putCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'PUT /repos/{owner}/{repo}/contents/{path}'
     )
-    expect(putCall?.[1].message).toBe('[Wisp] Update documentation')
+    expect(putCall?.[1].message).toBe('docs(README.md): Added login section')
     expect(putCall?.[1].path).toBe('README.md')
   })
 
-  it('opens a PR with title "[Wisp] Documentation Sync" targeting the default branch', async () => {
+  it('opens a PR referencing the triggering PR number targeting the default branch', async () => {
     const octokit = makeMockOctokit()
     await createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
     const prCall = (octokit.request as ReturnType<typeof vi.fn>).mock.calls.find(
       (c) => c[0] === 'POST /repos/{owner}/{repo}/pulls'
     )
-    expect(prCall?.[1].title).toBe('[Wisp] Documentation Sync')
+    expect(prCall?.[1].title).toBe('docs: sync documentation for #42')
     expect(prCall?.[1].base).toBe('main')
     expect(prCall?.[1].head).toBe('wisp/docs-sync-abc1234')
   })
