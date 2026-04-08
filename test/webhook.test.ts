@@ -7,9 +7,10 @@ let mockLLMResponse = JSON.stringify({
 
 vi.mock('../src/diff/fetcher.js', () => ({
   fetchDiff: vi.fn().mockResolvedValue({
-    files: [{ filename: 'src/auth.ts', patch: '@@ -1 +1 @@\n+export function login() {}' }],
+    files: [{ filename: 'src/auth.ts', status: 'modified', patch: '@@ -1 +1 @@\n+export function login() {}' }],
     tree: ['README.md', 'src/auth.ts'],
     truncated: false,
+    docs: [{ path: 'README.md', content: '# My App\n', truncated: false }],
   }),
 }))
 
@@ -19,7 +20,9 @@ vi.mock('../src/llm/adapter.js', () => ({
   })),
 }))
 
-const mockCreateDocSyncPR = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const mockCreateDocSyncPR = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ url: 'https://github.com/acme/app/pull/43', title: 'docs: sync documentation for #1' })
+)
 vi.mock('../src/pr/creator.js', () => ({
   createDocSyncPR: mockCreateDocSyncPR,
 }))
@@ -27,10 +30,18 @@ vi.mock('../src/pr/creator.js', () => ({
 import { handleMergedPR } from '../src/webhook/handler.js'
 
 const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-const mockOctokit = {} as any
+const mockOctokit = { request: vi.fn().mockResolvedValue({}) } as any
 
 const mergedPayload = {
-  pull_request: { merged: true, number: 1, merge_commit_sha: 'abc123def456' },
+  pull_request: {
+    merged: true,
+    number: 1,
+    merge_commit_sha: 'abc123def456',
+    title: 'Add login feature',
+    body: 'Implements OAuth login flow.',
+    user: { login: 'alice' },
+    head: { ref: 'feature/login' },
+  },
   repository: { owner: { login: 'acme' }, name: 'app', default_branch: 'main' },
 }
 
@@ -53,7 +64,19 @@ describe('integration: documentation sync pipeline', () => {
       mockOctokit,
       expect.objectContaining({ owner: 'acme', repo: 'app', pullNumber: 1 }),
       expect.arrayContaining([expect.objectContaining({ path: 'README.md' })]),
+      'alice',
       mockLog
+    )
+  })
+
+  it('posts a comment on the original PR after opening the docs PR', async () => {
+    await handleMergedPR(mockOctokit, mergedPayload, mockLog)
+    expect(mockOctokit.request).toHaveBeenCalledWith(
+      'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+      expect.objectContaining({
+        issue_number: 1,
+        body: expect.stringContaining('https://github.com/acme/app/pull/43'),
+      })
     )
   })
 
@@ -69,6 +92,24 @@ describe('integration: documentation sync pipeline', () => {
       pull_request: { ...mergedPayload.pull_request, merged: false },
     }
     await handleMergedPR(mockOctokit, unmergedPayload, mockLog)
+    expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
+  })
+
+  it('skips the pipeline for Wisp sync branch PRs', async () => {
+    const wispPayload = {
+      ...mergedPayload,
+      pull_request: { ...mergedPayload.pull_request, head: { ref: 'wisp/docs-sync-abc1234' } },
+    }
+    await handleMergedPR(mockOctokit, wispPayload, mockLog)
+    expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
+  })
+
+  it('skips the pipeline for known bot authors', async () => {
+    const botPayload = {
+      ...mergedPayload,
+      pull_request: { ...mergedPayload.pull_request, user: { login: 'dependabot[bot]' } },
+    }
+    await handleMergedPR(mockOctokit, botPayload, mockLog)
     expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
   })
 

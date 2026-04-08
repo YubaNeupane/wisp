@@ -11,8 +11,9 @@ export async function createDocSyncPR(
   octokit: Octokit,
   context: PullContext,
   updates: DocUpdate[],
+  prAuthor: string,
   log: Log
-): Promise<void> {
+): Promise<{ url: string; title: string }> {
   const { owner, repo, pullNumber, defaultBranch, mergeCommitSha } = context
   const branchName = `wisp/docs-sync-${mergeCommitSha.slice(0, 7)}`
 
@@ -67,10 +68,27 @@ export async function createDocSyncPR(
     })
   }
 
+  // Ensure the documentation label exists before creating the PR
+  try {
+    await octokit.request('POST /repos/{owner}/{repo}/labels', {
+      owner,
+      repo,
+      name: 'documentation',
+      color: '0075ca',
+      description: 'Improvements or additions to documentation',
+    })
+  } catch (err) {
+    // 422 = label already exists — expected on all runs after the first
+    if ((err as { status?: number }).status !== 422) {
+      log.error('Failed to ensure documentation label', err)
+    }
+  }
+
   const fileList = updates
     .map((u) => `**\`${u.path}\`** — ${u.reason}`)
     .join('\n\n')
 
+  const prTitle = `docs: sync documentation for #${pullNumber}`
   const body = `## Documentation Sync
 
 Wisp detected documentation that needs updating following the merge of #${pullNumber}.
@@ -83,14 +101,37 @@ ${fileList}
 
 <sub>Opened automatically by Wisp · Review carefully before merging</sub>`
 
-  await octokit.request('POST /repos/{owner}/{repo}/pulls', {
+  const prResponse = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
     owner,
     repo,
-    title: `docs: sync documentation for #${pullNumber}`,
+    title: prTitle,
     body,
     head: branchName,
     base: defaultBranch,
   })
 
-  log.info(`[Wisp] Opened documentation sync PR for #${pullNumber}: ${branchName}`)
+  const prData = prResponse.data as { html_url: string; number: number }
+
+  // Add label and assign to the author of the triggering PR in parallel
+  await Promise.all([
+    octokit
+      .request('POST /repos/{owner}/{repo}/issues/{issue_number}/labels', {
+        owner,
+        repo,
+        issue_number: prData.number,
+        labels: ['documentation'],
+      })
+      .catch((err) => log.error('Failed to add label to docs PR', err)),
+    octokit
+      .request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
+        owner,
+        repo,
+        issue_number: prData.number,
+        assignees: [prAuthor],
+      })
+      .catch((err) => log.error('Failed to assign docs PR', err)),
+  ])
+
+  log.info(`[Wisp] Opened documentation sync PR for #${pullNumber}: ${prData.html_url}`)
+  return { url: prData.html_url, title: prTitle }
 }

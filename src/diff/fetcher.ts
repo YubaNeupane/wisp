@@ -7,10 +7,17 @@ export interface FileDiff {
   previous_filename?: string
 }
 
+export interface DocContent {
+  path: string
+  content: string
+  truncated: boolean
+}
+
 export interface DiffResult {
   files: FileDiff[]
   tree: string[]
   truncated: boolean
+  docs: DocContent[]
 }
 
 export interface PullContext {
@@ -23,6 +30,37 @@ export interface PullContext {
 
 // Configurable via MAX_FILES env var (default: 50)
 export const MAX_FILES = Number(process.env.MAX_FILES) || 50
+
+const DOC_PATTERNS = [/\.md$/i, /\.mdx$/i, /\.example$/i, /^docs\//i, /^CHANGELOG/i, /^CONTRIBUTING/i]
+const MAX_DOC_FILES = 10
+const MAX_DOC_CHARS = 8000
+
+async function fetchDocContents(
+  octokit: Octokit,
+  context: PullContext,
+  tree: string[]
+): Promise<DocContent[]> {
+  const docPaths = tree.filter((p) => DOC_PATTERNS.some((re) => re.test(p))).slice(0, MAX_DOC_FILES)
+
+  const results = await Promise.allSettled(
+    docPaths.map(async (path) => {
+      const response = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner: context.owner,
+        repo: context.repo,
+        path,
+        ref: context.mergeCommitSha,
+      })
+      const data = response.data as { content: string; encoding: string }
+      const full = Buffer.from(data.content, 'base64').toString('utf8')
+      const truncated = full.length > MAX_DOC_CHARS
+      return { path, content: truncated ? full.slice(0, MAX_DOC_CHARS) : full, truncated }
+    })
+  )
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<DocContent> => r.status === 'fulfilled')
+    .map((r) => r.value)
+}
 
 export async function fetchDiff(octokit: Octokit, context: PullContext): Promise<DiffResult> {
   const [filesResponse, treeResponse] = await Promise.all([
@@ -49,5 +87,7 @@ export async function fetchDiff(octokit: Octokit, context: PullContext): Promise
     .map((item) => item.path)
     .filter((p): p is string => Boolean(p))
 
-  return { files, tree, truncated }
+  const docs = await fetchDocContents(octokit, context, tree)
+
+  return { files, tree, truncated, docs }
 }

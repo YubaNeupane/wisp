@@ -3,10 +3,13 @@ import type { LLMAdapter } from '../src/llm/adapter.js'
 import type { DiffResult } from '../src/diff/fetcher.js'
 
 const mockDiff: DiffResult = {
-  files: [{ filename: 'src/auth.ts', patch: '@@ -1,3 +1,5 @@\n+export function login() {}' }],
+  files: [{ filename: 'src/auth.ts', status: 'modified', patch: '@@ -1,3 +1,5 @@\n+export function login() {}' }],
   tree: ['README.md', 'docs/api.md', 'src/auth.ts'],
   truncated: false,
+  docs: [{ path: 'README.md', content: '# My App\n\n## Setup\n', truncated: false }],
 }
+
+const mockPR = { title: 'Add login feature', body: 'Implements login via OAuth.' }
 
 const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
@@ -24,7 +27,7 @@ describe('analyze', () => {
         })
       ),
     }
-    const result = await analyze(mockDiff, adapter, mockLog)
+    const result = await analyze(mockDiff, mockPR, adapter, mockLog)
     expect(result.updates).toHaveLength(1)
     expect(result.updates[0].path).toBe('README.md')
     expect(result.updates[0].content).toBe('# Updated README')
@@ -36,7 +39,7 @@ describe('analyze', () => {
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
     }
-    const result = await analyze(mockDiff, adapter, mockLog)
+    const result = await analyze(mockDiff, mockPR, adapter, mockLog)
     expect(result.updates).toHaveLength(0)
   })
 
@@ -45,7 +48,7 @@ describe('analyze', () => {
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue('Sure! Here are my suggestions: ...'),
     }
-    const result = await analyze(mockDiff, adapter, mockLog)
+    const result = await analyze(mockDiff, mockPR, adapter, mockLog)
     expect(result.updates).toHaveLength(0)
     expect(mockLog.warn).toHaveBeenCalled()
   })
@@ -55,21 +58,23 @@ describe('analyze', () => {
     const adapter: LLMAdapter = {
       send: vi.fn().mockRejectedValue(new Error('Network timeout')),
     }
-    const result = await analyze(mockDiff, adapter, mockLog)
+    const result = await analyze(mockDiff, mockPR, adapter, mockLog)
     expect(result.updates).toHaveLength(0)
     expect(mockLog.error).toHaveBeenCalled()
   })
 
-  it('includes the file tree and diff patch in the prompt', async () => {
+  it('includes the file tree, diff patch, and PR context in the prompt', async () => {
     const { analyze } = await import('../src/analysis/analyzer.js')
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
     }
-    await analyze(mockDiff, adapter, mockLog)
+    await analyze(mockDiff, mockPR, adapter, mockLog)
     const prompt = (adapter.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(prompt).toContain('README.md')
     expect(prompt).toContain('src/auth.ts')
     expect(prompt).toContain('login')
+    expect(prompt).toContain('Add login feature')
+    expect(prompt).toContain('OAuth')
   })
 
   it('notes truncation in the prompt when diff was truncated', async () => {
@@ -78,7 +83,7 @@ describe('analyze', () => {
     const adapter: LLMAdapter = {
       send: vi.fn().mockResolvedValue(JSON.stringify({ updates: [] })),
     }
-    await analyze(truncatedDiff, adapter, mockLog)
+    await analyze(truncatedDiff, mockPR, adapter, mockLog)
     const prompt = (adapter.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     expect(prompt).toContain('50')
   })
