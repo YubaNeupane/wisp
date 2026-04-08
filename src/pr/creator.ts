@@ -7,6 +7,45 @@ type Log = {
   error: (msg: string, err?: unknown) => void
 }
 
+export async function commitUpdatesToBranch(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  branchName: string,
+  updates: DocUpdate[]
+): Promise<void> {
+  // Serial loop required: each PUT creates a commit; concurrent writes would cause 409 conflicts
+  for (const update of updates) {
+    const encoded = Buffer.from(update.content).toString('base64')
+    let fileSha: string | undefined
+
+    try {
+      const existing = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
+        owner,
+        repo,
+        path: update.path,
+        ref: branchName,
+      })
+      fileSha = (existing.data as { sha: string }).sha
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      if (status !== 404) throw err
+      // File does not exist yet — no SHA needed for creation
+    }
+
+    const shortReason = update.reason.length > 72 ? update.reason.slice(0, 69) + '...' : update.reason
+    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
+      owner,
+      repo,
+      path: update.path,
+      message: `docs(${update.path}): ${shortReason}`,
+      content: encoded,
+      branch: branchName,
+      ...(fileSha !== undefined ? { sha: fileSha } : {}),
+    })
+  }
+}
+
 export async function createDocSyncPR(
   octokit: Octokit,
   context: PullContext,
@@ -38,36 +77,7 @@ export async function createDocSyncPR(
     // Branch already exists (duplicate webhook delivery) — continue
   }
 
-  // Serial loop required: each PUT creates a commit; concurrent writes would cause 409 conflicts
-  for (const update of updates) {
-    const encoded = Buffer.from(update.content).toString('base64')
-    let fileSha: string | undefined
-
-    try {
-      const existing = await octokit.request('GET /repos/{owner}/{repo}/contents/{path}', {
-        owner,
-        repo,
-        path: update.path,
-        ref: branchName,
-      })
-      fileSha = (existing.data as { sha: string }).sha
-    } catch (err) {
-      const status = (err as { status?: number }).status
-      if (status !== 404) throw err
-      // File does not exist yet — no SHA needed for creation
-    }
-
-    const shortReason = update.reason.length > 72 ? update.reason.slice(0, 69) + '...' : update.reason
-    await octokit.request('PUT /repos/{owner}/{repo}/contents/{path}', {
-      owner,
-      repo,
-      path: update.path,
-      message: `docs(${update.path}): ${shortReason}`,
-      content: encoded,
-      branch: branchName,
-      ...(fileSha !== undefined ? { sha: fileSha } : {}),
-    })
-  }
+  await commitUpdatesToBranch(octokit, owner, repo, branchName, updates)
 
   // Ensure the documentation label exists before creating the PR
   try {
