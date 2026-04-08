@@ -28,7 +28,7 @@ function makeMockOctokit(existingFileSha?: string) {
       }
       if (route === 'GET /repos/{owner}/{repo}/contents/{path}') {
         if (existingFileSha) return Promise.resolve({ data: { sha: existingFileSha } })
-        return Promise.reject(new Error('Not Found'))
+        return Promise.reject(Object.assign(new Error('Not Found'), { status: 404 }))
       }
       if (route === 'PUT /repos/{owner}/{repo}/contents/{path}') {
         return Promise.resolve({})
@@ -92,5 +92,32 @@ describe('createDocSyncPR', () => {
       (c) => c[0] === 'PUT /repos/{owner}/{repo}/contents/{path}'
     )
     expect(putCall?.[1].sha).toBeUndefined()
+  })
+
+  it('succeeds when branch already exists (duplicate webhook delivery)', async () => {
+    const octokit = {
+      request: vi.fn().mockImplementation((route: string) => {
+        if (route === 'GET /repos/{owner}/{repo}/git/ref/{ref}') {
+          return Promise.resolve({ data: { object: { sha: 'base-sha-000' } } })
+        }
+        if (route === 'POST /repos/{owner}/{repo}/git/refs') {
+          const err = Object.assign(new Error('Reference already exists'), { status: 422 })
+          return Promise.reject(err)
+        }
+        if (route === 'GET /repos/{owner}/{repo}/contents/{path}') {
+          return Promise.reject(Object.assign(new Error('Not Found'), { status: 404 }))
+        }
+        if (route === 'PUT /repos/{owner}/{repo}/contents/{path}') {
+          return Promise.resolve({})
+        }
+        if (route === 'POST /repos/{owner}/{repo}/pulls') {
+          return Promise.resolve({})
+        }
+        return Promise.resolve({})
+      }),
+    }
+    await expect(
+      createDocSyncPR(octokit as any, mockContext, mockUpdates, mockLog)
+    ).resolves.not.toThrow()
   })
 })

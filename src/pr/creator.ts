@@ -23,13 +23,20 @@ export async function createDocSyncPR(
   })
   const baseSha = (refResponse.data as { object: { sha: string } }).object.sha
 
-  await octokit.request('POST /repos/{owner}/{repo}/git/refs', {
-    owner,
-    repo,
-    ref: `refs/heads/${branchName}`,
-    sha: baseSha,
-  })
+  try {
+    await octokit.request('POST /repos/{owner}/{repo}/git/refs', {
+      owner,
+      repo,
+      ref: `refs/heads/${branchName}`,
+      sha: baseSha,
+    })
+  } catch (err) {
+    const status = (err as { status?: number }).status
+    if (status !== 422) throw err
+    // Branch already exists (duplicate webhook delivery) — continue
+  }
 
+  // Serial loop required: each PUT creates a commit; concurrent writes would cause 409 conflicts
   for (const update of updates) {
     const encoded = Buffer.from(update.content).toString('base64')
     let fileSha: string | undefined
@@ -42,7 +49,9 @@ export async function createDocSyncPR(
         ref: branchName,
       })
       fileSha = (existing.data as { sha: string }).sha
-    } catch {
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      if (status !== 404) throw err
       // File does not exist yet — no SHA needed for creation
     }
 
