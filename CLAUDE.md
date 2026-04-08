@@ -55,9 +55,10 @@ The analyzer instructs the LLM to return:
 | `APP_ID` | Yes | GitHub App ID |
 | `PRIVATE_KEY` | Yes | GitHub App private key (PEM) |
 | `WEBHOOK_SECRET` | Yes | Webhook signature verification |
-| `LLM_PROVIDER` | Yes | `anthropic` or `openai` |
+| `LLM_PROVIDER` | Yes | `anthropic`, `openai`, or `groq` |
 | `ANTHROPIC_API_KEY` | If provider=anthropic | |
 | `OPENAI_API_KEY` | If provider=openai | |
+| `GROQ_API_KEY` | If provider=groq | |
 | `LLM_MODEL` | No | Override default model |
 | `WISP_AUDIT_LOG` | No | Enable audit logging (default: false) |
 | `WISP_AUDIT_LOG_PATH` | No | File path for audit logs (default: .wisp/audit.log) |
