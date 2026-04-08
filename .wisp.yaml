@@ -5,6 +5,6 @@
   ignore_authors: [mybot]       # skip PRs from these authors
   ignore_labels: [no-docs]      # skip PRs with these labels
   instructions: |               # extra rules for the LLM
-    Always sort env var tables alphabetically. i want the most details on what was changes and logs of what was changes. i want architure diagrams and all that stuff. make it nice and easy to follow.
+    Always sort env var tables alphabetically.
   pr:
     draft: true                 # open docs PRs as drafts
