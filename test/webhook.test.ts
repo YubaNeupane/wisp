@@ -71,4 +71,18 @@ describe('integration: documentation sync pipeline', () => {
     await handleMergedPR(mockOctokit, unmergedPayload, mockLog)
     expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
   })
+
+  it('logs error and skips PR creation when fetchDiff throws', async () => {
+    const { fetchDiff } = await import('../src/diff/fetcher.js')
+    vi.mocked(fetchDiff).mockRejectedValueOnce(new Error('GitHub API error'))
+    await handleMergedPR(mockOctokit, mergedPayload, mockLog)
+    expect(mockCreateDocSyncPR).not.toHaveBeenCalled()
+    expect(mockLog.error).toHaveBeenCalled()
+  })
+
+  it('logs error when createDocSyncPR throws', async () => {
+    mockCreateDocSyncPR.mockRejectedValueOnce(new Error('GitHub API error'))
+    await handleMergedPR(mockOctokit, mergedPayload, mockLog)
+    expect(mockLog.error).toHaveBeenCalled()
+  })
 })

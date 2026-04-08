@@ -14,7 +14,7 @@ type MergedPRPayload = {
   pull_request: {
     merged: boolean
     number: number
-    merge_commit_sha: string // non-null when merged === true per GitHub API contract
+    merge_commit_sha: string | null // non-null when merged === true per GitHub API contract
   }
   repository: {
     owner: { login: string }
@@ -29,12 +29,17 @@ export async function handleMergedPR(
   log: Log
 ): Promise<void> {
   if (!payload.pull_request.merged) return
+  const sha = payload.pull_request.merge_commit_sha
+  if (!sha) {
+    log.error('merged PR has no merge_commit_sha — skipping')
+    return
+  }
 
   const context: PullContext = {
     owner: payload.repository.owner.login,
     repo: payload.repository.name,
     pullNumber: payload.pull_request.number,
-    mergeCommitSha: payload.pull_request.merge_commit_sha,
+    mergeCommitSha: sha,
     defaultBranch: payload.repository.default_branch,
   }
 
