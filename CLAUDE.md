@@ -26,15 +26,15 @@ Pipeline architecture — each stage is a discrete module:
 webhook/handler → diff/fetcher → analysis/analyzer (LLM) → pr/creator
 ```
 
-**`src/webhook/handler.ts`** — Probot entry point. Listens for `pull_request.closed`, guards on `merged === true`, extracts `owner`, `repo`, `pull_number`, `merge_commit_sha`, `default_branch`.
+**`src/webhook/handler.ts`** — Probot entry point. Listens for `pull_request.closed`, guards on `merged === true`, extracts `owner`, `repo`, `pull_number`, `merge_commit_sha`, `default_branch`, `title`, `body`, and `user`.
 
-**`src/diff/fetcher.ts`** — Two Octokit calls: PR file diffs + full repo file tree (paths only). Truncates to 50 files if exceeded.
+**`src/diff/fetcher.ts`** — Two Octokit calls: PR file diffs + full repo file tree (paths only). Truncates to 50 files if exceeded. Filters and fetches up to 10 documentation files or 8000 characters, whichever comes first.
 
 **`src/llm/adapter.ts`** — Provider-agnostic `LLMAdapter` interface (`send(prompt): Promise<string>`). Provider selected at startup via `LLM_PROVIDER`. Implementations in `providers/anthropic.ts` and `providers/openai.ts`.
 
-**`src/analysis/analyzer.ts`** — Builds prompt (system instruction + file tree + diff), calls LLM, parses structured JSON response. Returns empty `updates: []` on LLM failure or malformed JSON (logs warning, never throws).
+**`src/analysis/analyzer.ts`** — Builds prompt (system instruction + file tree + diff + PR title and body), calls LLM, parses structured JSON response. Returns empty `updates: []` on LLM failure or malformed JSON (logs warning, never throws).
 
-**`src/pr/creator.ts`** — When updates are non-empty: creates branch `wisp/docs-sync-<sha7>`, commits files with `[Wisp] Update documentation`, opens PR titled `[Wisp] Documentation Sync` targeting the default branch.
+**`src/pr/creator.ts`** — When updates are non-empty: creates branch `wisp/docs-sync-<sha7>`, commits files with `[Wisp] Update documentation`, opens PR titled `[Wisp] Documentation Sync` targeting the default branch, assigns it to original PR author, and labels as documentation.
 
 ## LLM Response Schema
 
@@ -59,6 +59,8 @@ The analyzer instructs the LLM to return:
 | `ANTHROPIC_API_KEY` | If provider=anthropic | |
 | `OPENAI_API_KEY` | If provider=openai | |
 | `LLM_MODEL` | No | Override default model |
+| `WISP_AUDIT_LOG` | No | Enable audit logging (default: false) |
+| `WISP_AUDIT_LOG_PATH` | No | File path for audit logs (default: .wisp/audit.log) |
 
 ## Testing Strategy
 
