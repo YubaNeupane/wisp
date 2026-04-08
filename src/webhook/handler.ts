@@ -38,7 +38,54 @@ const BOT_AUTHORS = new Set([
   'github-merge-queue[bot]',
 ])
 
+async function createCheckRun(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  headSha: string,
+  log: Log
+): Promise<number | null> {
+  try {
+    const response = await octokit.request('POST /repos/{owner}/{repo}/check-runs', {
+      owner,
+      repo,
+      name: 'Wisp Documentation',
+      head_sha: headSha,
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+    })
+    const data = response.data as { id: number }
+    return data.id
+  } catch (err) {
+    log.warn(`Failed to create check run (continuing): ${err instanceof Error ? err.message : String(err)}`)
+    return null
+  }
+}
 
+async function completeCheckRun(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  checkRunId: number | null,
+  conclusion: 'success' | 'neutral' | 'failure',
+  title: string,
+  summary: string
+): Promise<void> {
+  if (checkRunId === null) return
+  try {
+    await octokit.request('PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}', {
+      owner,
+      repo,
+      check_run_id: checkRunId,
+      status: 'completed',
+      conclusion,
+      completed_at: new Date().toISOString(),
+      output: { title, summary },
+    })
+  } catch {
+    // Check run completion is best-effort — never fail the pipeline over it
+  }
+}
 
 function matchesPathPrefix(filePath: string, prefixes: string[]): boolean {
   return prefixes.some((prefix) => filePath === prefix || filePath.startsWith(prefix + '/') || filePath.startsWith(prefix))
@@ -112,13 +159,15 @@ export async function handleMergedPR(
 
   log.info(`[Wisp] PR #${context.pullNumber} merged in ${owner}/${repo} — fetching diff`)
 
-
+  // Create check run (in_progress) — optional, errors do not stop processing
+  const checkRunId = await createCheckRun(octokit, owner, repo, sha, log)
 
   let diff
   try {
     diff = await fetchDiff(octokit, context)
   } catch (err) {
     log.error('Failed to fetch diff', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     return
   }
 
@@ -152,6 +201,7 @@ export async function handleMergedPR(
     adapter = createAdapter()
   } catch (err) {
     log.error('Failed to create LLM adapter (check LLM_PROVIDER env var)', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     return
   }
   const { updates: rawUpdates } = await analyze(filteredDiff, pr, adapter, log, { customInstructions })
@@ -167,6 +217,7 @@ export async function handleMergedPR(
 
   if (updates.length === 0) {
     log.info(`[Wisp] No documentation updates needed for PR #${context.pullNumber}`)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'neutral', 'No updates needed', 'No documentation changes were required for this PR.')
     await writeAuditLog(context, [], 'no_updates_needed')
     return
   }
@@ -175,6 +226,7 @@ export async function handleMergedPR(
 
   if (config.mode === 'comment') {
     await postDocSyncComment(octokit, context, updates, log)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'success', 'Documentation synced', updates.map((u) => `- \`${u.path}\``).join('\n'))
     await writeAuditLog(context, updates, 'synced')
     return
   }
@@ -185,6 +237,7 @@ export async function handleMergedPR(
     docsPR = await createDocSyncPR(octokit, context, updates, prAuthor, log, config.pr?.draft ?? false)
   } catch (err) {
     log.error('Failed to create documentation sync PR', err)
+    await completeCheckRun(octokit, owner, repo, checkRunId, 'failure', 'Documentation sync failed', String(err instanceof Error ? err.message : err))
     await writeAuditLog(context, updates, 'error', String(err instanceof Error ? err.message : err))
     return
   }
@@ -201,5 +254,6 @@ export async function handleMergedPR(
     log.error('Failed to post comment on PR', err)
   }
 
+  await completeCheckRun(octokit, owner, repo, checkRunId, 'success', 'Documentation synced', updates.map((u) => `- \`${u.path}\``).join('\n'))
   await writeAuditLog(context, updates, 'synced')
 }
