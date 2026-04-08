@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smee": "npx smee -u https://smee.io/NFYi9DNsDw53TCsx --port 3000 --path /api/github/webhooks"
+    "smee": "npx smee -u https://smee.io/NFYi9DNsDw53TCsx --port 3000 --path /api/github/webhooks",
+    "test:pr": "BRANCH=test/wisp-$(date +%s) && git checkout -b $BRANCH && echo \"wisp test $(date)\" >> test-trigger.txt && git add test-trigger.txt && git commit -m 'test: trigger wisp doc sync' && git push -u origin $BRANCH && gh pr create --title 'Test: trigger Wisp' --body 'Automated test PR to trigger Wisp doc sync.' --base main && gh pr merge --squash --delete-branch --yes"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",

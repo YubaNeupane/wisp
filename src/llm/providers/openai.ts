@@ -11,7 +11,7 @@ export class OpenAIAdapter implements LLMAdapter {
   }
 
   async send(prompt: string): Promise<string> {
-    const model = process.env.LLM_MODEL ?? DEFAULT_MODEL
+    const model = process.env.LLM_MODEL || DEFAULT_MODEL
     const response = await this.client.chat.completions.create({
       model,
       max_tokens: 4096,

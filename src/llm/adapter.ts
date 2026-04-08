@@ -23,3 +23,15 @@ export function createAdapter(): LLMAdapter {
   }
   return new Provider()
 }
+
+export async function checkLLM(): Promise<void> {
+  const adapter = createAdapter()
+  const provider = process.env.LLM_PROVIDER!.trim()
+  console.log(`[Wisp] Checking LLM connectivity (provider: ${provider})...`)
+  try {
+    await adapter.send('Respond with the single word: ok')
+    console.log(`[Wisp] LLM check passed`)
+  } catch (err) {
+    throw new Error(`LLM check failed for provider "${provider}": ${err instanceof Error ? err.message : String(err)}`)
+  }
+}

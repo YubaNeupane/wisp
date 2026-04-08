@@ -13,7 +13,7 @@ export class AnthropicAdapter implements LLMAdapter {
   }
 
   async send(prompt: string): Promise<string> {
-    const model = process.env.LLM_MODEL ?? DEFAULT_MODEL
+    const model = process.env.LLM_MODEL || DEFAULT_MODEL
     const message = await this.client.messages.create({
       model,
       max_tokens: 4096,

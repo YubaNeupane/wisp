@@ -14,7 +14,7 @@ export class GeminiAdapter implements LLMAdapter {
 
   async send(prompt: string): Promise<string> {
     const model = this.client.getGenerativeModel({
-      model: process.env.LLM_MODEL ?? DEFAULT_MODEL,
+      model: process.env.LLM_MODEL || DEFAULT_MODEL,
     })
     const result = await model.generateContent(prompt)
     const text = result.response.text()
