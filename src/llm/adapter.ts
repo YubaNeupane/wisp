@@ -1,6 +1,7 @@
 import { AnthropicAdapter } from './providers/anthropic.js'
 import { GeminiAdapter } from './providers/gemini.js'
 import { OpenAIAdapter } from './providers/openai.js'
+import { GroqAdapter } from './providers/groq.js'
 
 export interface LLMAdapter {
   send(prompt: string): Promise<string>
@@ -10,6 +11,7 @@ const PROVIDERS: Record<string, new () => LLMAdapter> = {
   anthropic: AnthropicAdapter,
   gemini: GeminiAdapter,
   openai: OpenAIAdapter,
+  groq: GroqAdapter,
 }
 
 export function createAdapter(): LLMAdapter {
