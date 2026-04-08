@@ -12,7 +12,8 @@ export async function createDocSyncPR(
   context: PullContext,
   updates: DocUpdate[],
   prAuthor: string,
-  log: Log
+  log: Log,
+  draft = false
 ): Promise<{ url: string; title: string }> {
   const { owner, repo, pullNumber, defaultBranch, mergeCommitSha } = context
   const branchName = `wisp/docs-sync-${mergeCommitSha.slice(0, 7)}`
@@ -108,6 +109,7 @@ ${fileList}
     body,
     head: branchName,
     base: defaultBranch,
+    draft,
   })
 
   const prData = prResponse.data as { html_url: string; number: number }

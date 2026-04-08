@@ -40,7 +40,8 @@ If no documentation needs updating, return exactly: {"updates": []}`
 
 export function buildPrompt(
   diff: DiffResult,
-  pr: { title: string; body: string | null }
+  pr: { title: string; body: string | null },
+  customInstructions?: string
 ): string {
   const prBody = pr.body?.trim() ? pr.body.trim() : '*(No description provided)*'
 
@@ -76,6 +77,10 @@ export function buildPrompt(
           .join('\n\n')
       : ''
 
+  const customSection = customInstructions
+    ? `\n\n## Additional Instructions\n\n${customInstructions}`
+    : ''
+
   return `${SYSTEM_INSTRUCTION}
 
 ## Pull Request Context
@@ -92,5 +97,5 @@ ${docsSection}
 
 ## Code Changes (diff)${truncationNote}
 
-${diffContent}`
+${diffContent}${customSection}`
 }

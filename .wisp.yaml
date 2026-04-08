@@ -1,0 +1,10 @@
+  mode: comment          # 'pr' (default) or 'comment' — post suggestions inline instead of opening a PR
+  docs:
+    focus: [README.md, docs/]   # only touch these
+    ignore: [CHANGELOG.md]      # never touch these
+  ignore_authors: [mybot]       # skip PRs from these authors
+  ignore_labels: [no-docs]      # skip PRs with these labels
+  instructions: |               # extra rules for the LLM
+    Always sort env var tables alphabetically.
+  pr:
+    draft: true                 # open docs PRs as drafts
