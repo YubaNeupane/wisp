@@ -1,4 +1,4 @@
-  mode: pr               # 'pr' (default) or 'comment' — post suggestions inline instead of opening a PR
+  mode: comment               # 'pr' (default) or 'comment' — post suggestions inline instead of opening a PR
   docs:
     focus: [README.md, docs/]   # only touch these
     ignore: [CHANGELOG.md]      # never touch these
